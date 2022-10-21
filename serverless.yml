@@ -1,0 +1,74 @@
+service: openai-serverless
+
+provider:
+  name: aws
+  runtime: python3.8
+  stage: ${opt:stage, "prod"}
+  region: ${opt:region, env:AWS_REGION, "us-west-2"}
+  profile: ${env:AWS_PROFILE, "x-tech"}
+  lambdaHashingVersion: 20201221
+  memorySize: 256
+  timeout: 30
+  iam:
+    role: lambdaRole
+
+variablesResolutionMode: 20210326
+useDotenv: true
+
+package:
+  individually: false
+  patterns:
+    - '!**'
+    - './functions/**/*'
+    - '!./functions/**/__pycache__/*'
+    - '!./functions/__pycache__/*'
+
+functions:
+  - ${file(./resources/authorizer_function.yml)}
+  - ${file(./resources/openai_functions.yml)}
+
+resources:
+  - ${file(./resources/iam.yml)}
+
+custom:
+  prefix: ${self:service}-${self:provider.stage}
+
+  additionalStacks:
+    dynamodb: ${file(./resources/dynamodb.yml):stack}
+    s3: ${file(./resources/s3.yml):stack}
+
+  pythonRequirements:
+    dockerizePip: non-linux
+    usePipenv: true
+    zip: false
+    noDeploy:
+      # unnecessary openai dependencies
+      - openpyxl
+      - et-xmlfile
+      - pandas
+      - numpy
+      - python-dateutil
+      - six
+      - pytz
+      - pandas-stubs
+      - tqdm
+      # boto3 dependencies
+      - boto3
+      - botocore
+      - jmespath
+      - s3transfer
+      # jwcrypto deps
+      - cryptography
+      # pydantic deps
+      - pydantic
+      - typing-extensions
+
+  customDomains:
+    domainName: ${env:DOMAIN_NAME}
+    certificateArn: ${env:ACM_ARN}
+
+plugins:
+  - serverless-python-requirements
+  - serverless-offline
+  - serverless-domain-manager
+  - serverless-plugin-additional-stacks
